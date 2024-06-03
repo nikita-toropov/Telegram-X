@@ -14,6 +14,7 @@
  */
 package org.thunderdog.challegram.tool;
 
+import android.annotation.SuppressLint;
 import android.content.Context;
 import android.graphics.Point;
 import android.graphics.Rect;
@@ -23,6 +24,8 @@ import android.util.TypedValue;
 import android.view.Display;
 import android.view.ViewConfiguration;
 import android.view.WindowManager;
+
+import androidx.core.content.res.ResourcesCompat;
 
 import org.thunderdog.challegram.BaseActivity;
 import org.thunderdog.challegram.component.chat.ReplyComponent;
@@ -328,6 +331,15 @@ public class Screen {
     } else {
       return 0;
     }
+  }
+
+  public static int getStatusBarCameraTopMargin () {
+    @SuppressLint("DiscouragedApi")
+    int resourceId = UI.getResources().getIdentifier("status_bar_camera_top_margin", "dimen", "android");
+    if (resourceId != ResourcesCompat.ID_NULL) {
+      return UI.getResources().getDimensionPixelOffset(resourceId);
+    }
+    return -1;
   }
 
   public static float getTouchSlop () {

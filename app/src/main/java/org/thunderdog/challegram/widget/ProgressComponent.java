@@ -142,6 +142,10 @@ public class ProgressComponent implements Runnable, FactorAnimator.Target, Destr
     this.strokeWidth = strokeWidth;
   }
 
+  public void setBounds (Rect rect) {
+    setBounds(rect.left, rect.top, rect.right, rect.bottom);
+  }
+
   public void setBounds (int left, int top, int right, int bottom) {
     drawingRect.set(left, top, right, bottom);
 

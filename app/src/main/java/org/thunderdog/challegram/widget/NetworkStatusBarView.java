@@ -15,6 +15,9 @@
 package org.thunderdog.challegram.widget;
 
 import android.content.Context;
+import android.content.res.Configuration;
+import android.graphics.Canvas;
+import android.graphics.Rect;
 import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.View;
@@ -23,12 +26,14 @@ import android.widget.LinearLayout;
 import android.widget.TextView;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 import androidx.annotation.StringRes;
 
 import org.drinkless.tdlib.TdApi;
 import org.thunderdog.challegram.BaseActivity;
 import org.thunderdog.challegram.Log;
 import org.thunderdog.challegram.config.Config;
+import org.thunderdog.challegram.config.Device;
 import org.thunderdog.challegram.core.Lang;
 import org.thunderdog.challegram.support.ViewSupport;
 import org.thunderdog.challegram.telegram.ConnectionState;
@@ -43,6 +48,8 @@ import org.thunderdog.challegram.theme.Theme;
 import org.thunderdog.challegram.theme.ThemeListenerList;
 import org.thunderdog.challegram.tool.Screen;
 import org.thunderdog.challegram.tool.UI;
+import org.thunderdog.challegram.unsorted.Settings;
+import org.thunderdog.challegram.util.PunchHole;
 
 import me.vkryl.android.AnimatorUtils;
 import me.vkryl.android.animator.FactorAnimator;
@@ -50,14 +57,19 @@ import me.vkryl.android.widget.FrameLayoutFix;
 import me.vkryl.core.lambda.Destroyable;
 
 public class NetworkStatusBarView extends FrameLayoutFix implements Destroyable, Screen.StatusBarHeightChangeListener, GlobalConnectionListener, FactorAnimator.Target, PopupLayout.TouchSectionProvider, Runnable, BaseActivity.ActivityListener, GlobalAccountListener {
-  private ProgressComponentView progressView;
-  private TextView textView;
-  private LinearLayout statusWrap;
+  private final ProgressComponentView progressView;
+  private final TextView textView;
+  private final LinearLayout statusWrap;
+
+  private final Rect punchHoleRect = new Rect();
+  private @Nullable PunchHole punchHole;
+  private @Nullable ProgressComponent progress;
 
   public NetworkStatusBarView (Context context) {
     super(context);
 
-    setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, Screen.getStatusBarHeight()));
+    int statusBarHeight = Screen.getStatusBarHeight();
+    setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, statusBarHeight));
     Screen.addStatusBarHeightListener(this);
 
     int color = Theme.getColor(Config.STATUS_BAR_TEXT_COLOR_ID);
@@ -87,6 +99,10 @@ public class NetworkStatusBarView extends FrameLayoutFix implements Destroyable,
     addView(statusWrap);
     ViewSupport.setThemedBackground(this, ColorId.statusBar);
 
+    if (Device.IS_SAMSUNG && Settings.instance().usePunchHoleLoader()) {
+      punchHole = new PunchHole(context);
+      updatePunchHoleRect(statusBarHeight);
+    }
 
     TdlibManager.instance().global().addAccountListener(this);
     TdlibManager.instance().global().addConnectionListener(this);
@@ -97,17 +113,66 @@ public class NetworkStatusBarView extends FrameLayoutFix implements Destroyable,
   }
 
   @Override
+  protected void onConfigurationChanged (Configuration newConfig) {
+    super.onConfigurationChanged(newConfig);
+    updatePunchHoleRect(Screen.getStatusBarHeight());
+  }
+
+  private void updatePunchHoleRect (int statusBarHeight) {
+    if (punchHole != null && punchHole.initialize() && punchHole.isCircle()) {
+      punchHole.getCircleRect(punchHoleRect);
+      boolean usePunchHoleLoader = !punchHoleRect.isEmpty() && punchHoleRect.bottom <= statusBarHeight;
+      setWillNotDraw(!usePunchHoleLoader);
+      invalidate();
+      if (usePunchHoleLoader) {
+        if (progress == null) {
+          progress = new ProgressComponent(UI.getContext(getContext()), /* radius */ 0);
+          progress.setUseStupidInvalidate();
+          progress.forceColor(Theme.getColor(Config.STATUS_BAR_TEXT_COLOR_ID));
+          progress.setAlpha(factor);
+          if (factor > 0f) {
+            progress.attachToView(this);
+          }
+        }
+        int progressRadius = Math.round(punchHoleRect.height() / 2f + Screen.dp(1.5f) / 2f) ;
+        progress.setRadius(progressRadius);
+      }
+      statusWrap.setVisibility(usePunchHoleLoader ? View.GONE : View.VISIBLE);
+    } else {
+      punchHoleRect.setEmpty();
+    }
+  }
+
+  @Override
+  protected void onDraw (@NonNull Canvas canvas) {
+    super.onDraw(canvas);
+
+    if (punchHole != null && !punchHoleRect.isEmpty() && progress != null) {
+      progress.setBounds(punchHoleRect);
+      progress.draw(canvas);
+    }
+  }
+
+  @Override
   public void onStatusBarHeightChanged (int newHeight) {
     Log.i("new height: %d", newHeight);
     if (getLayoutParams() != null && getLayoutParams().height != newHeight) {
       getLayoutParams().height = newHeight;
       setLayoutParams(getLayoutParams());
+      updatePunchHoleRect(newHeight);
     }
   }
 
   public void addThemeListeners (ThemeListenerList list) {
     list.addThemeColorListener(textView, Config.STATUS_BAR_TEXT_COLOR_ID);
     list.addThemeColorListener(progressView, Config.STATUS_BAR_TEXT_COLOR_ID);
+  }
+
+  public void onThemeColorsChanged () {
+    if (progress != null) {
+      progress.forceColor(Theme.getColor(Config.STATUS_BAR_TEXT_COLOR_ID));
+    }
+    invalidate();
   }
 
   public void updateDirection () {
@@ -221,6 +286,14 @@ public class NetworkStatusBarView extends FrameLayoutFix implements Destroyable,
       statusWrap.setAlpha(factor);
       statusWrap.setTranslationY(-Screen.getStatusBarHeight() + (int) ((float) Screen.getStatusBarHeight() * getVisibilityFactor()));
       checkLowProfile();
+      if (progress != null) {
+        if (factor > 0f) {
+          progress.attachToView(this);
+        } else {
+          progress.detachFromView(this);
+        }
+        progress.setAlpha(factor);
+      }
     }
   }
 

@@ -129,6 +129,7 @@ import org.thunderdog.challegram.util.ActivityPermissionResult;
 import org.thunderdog.challegram.util.AppUpdater;
 import org.thunderdog.challegram.util.KonfettiBuilder;
 import org.thunderdog.challegram.util.Permissions;
+import org.thunderdog.challegram.util.PunchHole;
 import org.thunderdog.challegram.widget.BaseRootLayout;
 import org.thunderdog.challegram.widget.DragDropLayout;
 import org.thunderdog.challegram.widget.ForceTouchView;
@@ -532,6 +533,9 @@ public abstract class BaseActivity extends ComponentActivity implements View.OnT
       statusBar = new NetworkStatusBarView(this);
       statusBar.addThemeListeners(themeList);
       rootView.addView(statusBar);
+      if (Device.IS_SAMSUNG && Settings.instance().usePunchHoleLoader() && PunchHole.isCircle(this)) {
+        rootView.setClipChildren(false); // FIXME
+      }
     }
 
     setContentView(rootView);
@@ -3312,8 +3316,9 @@ public abstract class BaseActivity extends ComponentActivity implements View.OnT
     if (inlineResultsView != null) {
       inlineResultsView.getThemeProvider().onThemeColorsChanged(areTemp);
     }
-    if (statusBar != null && (!areTemp || ThemeManager.instance().hasColorChanged(Config.STATUS_BAR_COLOR_ID)))
-      statusBar.invalidate();
+    if (statusBar != null && (!areTemp || ThemeManager.instance().hasColorChanged(Config.STATUS_BAR_COLOR_ID))) {
+      statusBar.onThemeColorsChanged();
+    }
     if (tooltipOverlayView != null) {
       tooltipOverlayView.invalidate();
     }
